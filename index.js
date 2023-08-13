@@ -148,7 +148,7 @@ async function run() {
 
 
 
-    //get courses apis collection
+    //get courses apis collection here
     app.get('/Courses', async (req, res) => {
       const result = await CoursesCollection.find().toArray();
       res.send(result);
