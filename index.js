@@ -2,14 +2,47 @@ const express = require('express');
 const app = express();
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();
 const port = process.env.PORT || 5000;
 
 
+// Multer setups
+const storage = multer.diskStorage ({
+  destination: function (req , file , cb){
+    if(!fs.existsSync('public')){
+      fs.mkdirSync("public");
+    }
+    if(!fs.existsSync("public/videos")){
+      fs.mkdirSync("public/videos");
+    }
+    cb(null,"public/videos");
+  },
+  filename: function(req,file,cb){
+    cb(null, Date.now()+ file.originalname);
+  }
+})
+
+const upload = multer({
+  storage: storage,fileFilter: function(req,file,cb){
+    let ext  = path.extname(file.originalname);
+
+    if(ext !== ".mkv" && ext !== ".mp4"){
+      return cb(new Error("Only videos are allowed"));
+    }
+    cb(null,true);
+  }
+})
+
+
 // middleware
 app.use(cors());
 app.use(express.json());
+
+
 
 const verifyJWT = (req, res, next) => {
   const authorization = req.headers.authorization;
@@ -59,6 +92,7 @@ async function run() {
     const CoursesCollection = client.db("bbahub").collection("Courses");
     const reviewsCollection = client.db("bbahub").collection("Reviews");
     const userCollection = client.db("bbahub").collection("users");
+    const videoCollection = client.db('bbahub').collection('videos');
 
     app.post('/jwt', (req, res) => {
       const user = req.body;
@@ -161,6 +195,49 @@ async function run() {
       res.send(result);
     })
 
+
+    // Get all videos from backend
+      app.get('/videos/all', async (req, res) => {
+        const allVideos = await videoCollection.find().toArray();
+        res.send(allVideos);
+      });
+
+
+      // Post courses to backend
+      app.post('/videos/upload',upload.fields([
+        {
+          name: "videos", 
+          maxCount:5,
+        }
+      ]),async (req, res) => {
+        console.log("hitted in api");
+       const {name} = req.body;
+       let videosPaths = [];
+
+       if(Array.isArray(req.files.videos)&& req.files.videos.length > 0){
+        for(let video of req.files.videos){
+          videosPaths.push("/" + video.path);
+        }
+       }
+
+       try{
+        const createdMedia = await videoCollection.insertOne({
+          name,
+          videos: videosPaths,
+        })
+        
+        res.json({message: "Media created successfully", createdMedia})
+      
+       }
+       catch(err){
+        console.log(err);
+        res.status(400).json(err);
+       }
+        // const result = await videoCollection.insertOne(video);
+        // res.send(result);
+      });
+
+ 
 
 
     // Send a ping to confirm a successful connection
